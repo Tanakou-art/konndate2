@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>Web料理検索アプリ</title>
+  <title>世界の料理レシピ検索</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
@@ -12,46 +12,48 @@
 <div class="bg-white shadow-xl rounded-3xl p-6 w-full max-w-2xl">
 
   <h1 class="text-2xl font-bold text-center text-orange-600 mb-2">
-    🍳 Web料理検索アプリ
+    🌍 世界の料理レシピ検索
   </h1>
 
   <p class="text-center text-gray-500 mb-6">
-    入力した食材に関連する料理情報をWikipediaから取得します
+    国を選ぶと、その国の代表的な料理レシピ情報を取得します
   </p>
 
-  <div class="flex gap-2 mb-4">
-    <input
-      id="searchInput"
-      type="text"
-      placeholder="例：豚肉 キャベツ"
-      class="flex-1 border rounded-xl p-2"
-    />
-    <button
-      onclick="searchWikipedia()"
-      class="bg-orange-500 text-white px-4 rounded-xl"
-    >
-      検索
-    </button>
+  <!-- 国選択 -->
+  <div class="mb-4">
+    <label class="font-bold text-sm">国を選択</label>
+    <select id="countrySelect" class="w-full border rounded-xl p-2 mt-2">
+      <option value="日本料理">🇯🇵 日本</option>
+      <option value="イタリア料理">🇮🇹 イタリア</option>
+      <option value="フランス料理">🇫🇷 フランス</option>
+      <option value="中華料理">🇨🇳 中国</option>
+      <option value="韓国料理">🇰🇷 韓国</option>
+      <option value="メキシコ料理">🇲🇽 メキシコ</option>
+      <option value="インド料理">🇮🇳 インド</option>
+      <option value="タイ料理">🇹🇭 タイ</option>
+    </select>
   </div>
 
-  <div id="loading" class="hidden text-orange-500 mb-4">
-    検索中...
+  <button
+    onclick="searchCuisine()"
+    class="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold py-3 rounded-2xl"
+  >
+    🍳 料理を表示する
+  </button>
+
+  <div id="loading" class="hidden text-orange-500 mt-4">
+    データ取得中...
   </div>
 
-  <div id="results" class="space-y-4"></div>
+  <div id="results" class="space-y-6 mt-6"></div>
 
 </div>
 
 <script>
-async function searchWikipedia() {
-  const query = document.getElementById("searchInput").value.trim();
+async function searchCuisine() {
+  const country = document.getElementById("countrySelect").value;
   const resultsDiv = document.getElementById("results");
   const loadingDiv = document.getElementById("loading");
-
-  if (!query) {
-    alert("キーワードを入力してください");
-    return;
-  }
 
   resultsDiv.innerHTML = "";
   loadingDiv.classList.remove("hidden");
@@ -61,7 +63,7 @@ async function searchWikipedia() {
       new URLSearchParams({
         action: "query",
         list: "search",
-        srsearch: query + " 料理",
+        srsearch: country,
         format: "json",
         origin: "*"
       });
@@ -69,30 +71,47 @@ async function searchWikipedia() {
     const response = await fetch(url);
     const data = await response.json();
 
-    loadingDiv.classList.add("hidden");
-
-    if (data.query.search.length === 0) {
-      resultsDiv.innerHTML = "<p class='text-gray-500'>結果が見つかりませんでした。</p>";
+    if (!data.query.search.length) {
+      loadingDiv.classList.add("hidden");
+      resultsDiv.innerHTML = "<p class='text-gray-500'>料理情報が見つかりませんでした。</p>";
       return;
     }
 
-    data.query.search.slice(0,5).forEach(item => {
-      const pageUrl = "https://ja.wikipedia.org/wiki/" + encodeURIComponent(item.title);
+    // 上位3件表示
+    const topResults = data.query.search.slice(0,3);
+
+    for (let item of topResults) {
+
+      const detailUrl = "https://ja.wikipedia.org/w/api.php?" +
+        new URLSearchParams({
+          action: "query",
+          prop: "extracts",
+          exintro: true,
+          explaintext: true,
+          titles: item.title,
+          format: "json",
+          origin: "*"
+        });
+
+      const detailResponse = await fetch(detailUrl);
+      const detailData = await detailResponse.json();
+      const pages = detailData.query.pages;
+      const page = pages[Object.keys(pages)[0]];
 
       const card = document.createElement("div");
       card.className = "border rounded-xl p-4 bg-orange-50";
 
       card.innerHTML = `
         <h2 class="font-bold text-lg text-orange-700">${item.title}</h2>
-        <p class="text-sm text-gray-600 mt-2">${item.snippet}...</p>
-        <a href="${pageUrl}" target="_blank"
-           class="text-blue-600 underline mt-2 inline-block">
-           Wikipediaで詳しく見る
-        </a>
+        <p class="text-sm text-gray-700 mt-2">
+          ${page.extract ? page.extract.substring(0, 300) + "..." : "説明が取得できませんでした。"}
+        </p>
       `;
 
       resultsDiv.appendChild(card);
-    });
+    }
+
+    loadingDiv.classList.add("hidden");
 
   } catch (error) {
     loadingDiv.classList.add("hidden");
