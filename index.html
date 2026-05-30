@@ -1,145 +1,104 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <title>Webレシピ検索アプリ</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-  <!-- Tailwind CDN -->
+  <meta charset="UTF-8">
+  <title>Web料理検索アプリ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://cdn.tailwindcss.com"></script>
-
-  <style>
-    body {
-      font-family: sans-serif;
-    }
-  </style>
 </head>
+
 <body class="bg-orange-50 min-h-screen flex items-center justify-center p-6">
 
-  <div class="bg-white shadow-xl rounded-3xl p-6 w-full max-w-xl">
+<div class="bg-white shadow-xl rounded-3xl p-6 w-full max-w-2xl">
 
-    <h1 class="text-2xl font-bold text-center text-orange-600 mb-2">
-      🍳 Webレシピ検索アプリ
-    </h1>
-    <p class="text-center text-gray-500 mb-6">
-      冷蔵庫の食材からWeb上のレシピを探します
-    </p>
+  <h1 class="text-2xl font-bold text-center text-orange-600 mb-2">
+    🍳 Web料理検索アプリ
+  </h1>
 
-    <!-- ジャンル選択 -->
-    <div class="mb-4">
-      <label class="font-bold text-sm">料理ジャンル</label>
-      <select id="country" class="w-full border rounded-xl p-2 mt-2">
-        <option value="">指定なし</option>
-        <option value="和食">和食</option>
-        <option value="中華">中華</option>
-        <option value="イタリアン">イタリアン</option>
-        <option value="韓国料理">韓国料理</option>
-      </select>
-    </div>
+  <p class="text-center text-gray-500 mb-6">
+    入力した食材に関連する料理情報をWikipediaから取得します
+  </p>
 
-    <!-- 食材入力 -->
-    <div class="flex gap-2 mb-4">
-      <input
-        id="ingredientInput"
-        type="text"
-        placeholder="例：豚肉"
-        class="flex-1 border rounded-xl p-2"
-      />
-      <button
-        onclick="addIngredient()"
-        class="bg-orange-500 text-white px-4 rounded-xl"
-      >
-        追加
-      </button>
-    </div>
-
-    <!-- タグ表示 -->
-    <div id="ingredientList" class="flex flex-wrap gap-2 mb-6"></div>
-
-    <!-- 検索ボタン -->
+  <div class="flex gap-2 mb-4">
+    <input
+      id="searchInput"
+      type="text"
+      placeholder="例：豚肉 キャベツ"
+      class="flex-1 border rounded-xl p-2"
+    />
     <button
-      onclick="searchRecipes()"
-      class="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold py-3 rounded-2xl"
+      onclick="searchWikipedia()"
+      class="bg-orange-500 text-white px-4 rounded-xl"
     >
-      🔍 レシピを検索する
+      検索
     </button>
-
-    <!-- 結果表示 -->
-    <div id="resultArea" class="mt-6 space-y-3"></div>
-
   </div>
 
+  <div id="loading" class="hidden text-orange-500 mb-4">
+    検索中...
+  </div>
+
+  <div id="results" class="space-y-4"></div>
+
+</div>
+
 <script>
-  let ingredients = [];
+async function searchWikipedia() {
+  const query = document.getElementById("searchInput").value.trim();
+  const resultsDiv = document.getElementById("results");
+  const loadingDiv = document.getElementById("loading");
 
-  function addIngredient() {
-    const input = document.getElementById("ingredientInput");
-    const value = input.value.trim();
-
-    if (value && !ingredients.includes(value)) {
-      ingredients.push(value);
-      input.value = "";
-      renderIngredients();
-    }
+  if (!query) {
+    alert("キーワードを入力してください");
+    return;
   }
 
-  function removeIngredient(index) {
-    ingredients.splice(index, 1);
-    renderIngredients();
-  }
+  resultsDiv.innerHTML = "";
+  loadingDiv.classList.remove("hidden");
 
-  function renderIngredients() {
-    const list = document.getElementById("ingredientList");
-    list.innerHTML = "";
+  try {
+    const url = "https://ja.wikipedia.org/w/api.php?" +
+      new URLSearchParams({
+        action: "query",
+        list: "search",
+        srsearch: query + " 料理",
+        format: "json",
+        origin: "*"
+      });
 
-    ingredients.forEach((item, index) => {
-      const tag = document.createElement("span");
-      tag.className = "bg-orange-100 text-orange-700 px-3 py-1 rounded-full flex items-center gap-2";
+    const response = await fetch(url);
+    const data = await response.json();
 
-      tag.innerHTML = `
-        ${item}
-        <button onclick="removeIngredient(${index})" class="text-sm">✕</button>
-      `;
+    loadingDiv.classList.add("hidden");
 
-      list.appendChild(tag);
-    });
-  }
-
-  function searchRecipes() {
-    if (ingredients.length === 0) {
-      alert("食材を入力してください");
+    if (data.query.search.length === 0) {
+      resultsDiv.innerHTML = "<p class='text-gray-500'>結果が見つかりませんでした。</p>";
       return;
     }
 
-    const country = document.getElementById("country").value;
-    const query = ingredients.join(" ") + " " + country;
-    const encodedQuery = encodeURIComponent(query);
+    data.query.search.slice(0,5).forEach(item => {
+      const pageUrl = "https://ja.wikipedia.org/wiki/" + encodeURIComponent(item.title);
 
-    const cookpad = `https://cookpad.com/search/${encodedQuery}`;
-    const rakuten = `https://recipe.rakuten.co.jp/search/${encodedQuery}/`;
-    const delish = `https://delishkitchen.tv/search?q=${encodedQuery}`;
+      const card = document.createElement("div");
+      card.className = "border rounded-xl p-4 bg-orange-50";
 
-    const resultArea = document.getElementById("resultArea");
+      card.innerHTML = `
+        <h2 class="font-bold text-lg text-orange-700">${item.title}</h2>
+        <p class="text-sm text-gray-600 mt-2">${item.snippet}...</p>
+        <a href="${pageUrl}" target="_blank"
+           class="text-blue-600 underline mt-2 inline-block">
+           Wikipediaで詳しく見る
+        </a>
+      `;
 
-    resultArea.innerHTML = `
-      <h2 class="font-bold text-gray-700 mb-2">検索結果リンク</h2>
+      resultsDiv.appendChild(card);
+    });
 
-      <a href="${cookpad}" target="_blank"
-        class="block bg-green-100 p-3 rounded-xl hover:bg-green-200">
-        🍳 クックパッドで検索
-      </a>
-
-      <a href="${rakuten}" target="_blank"
-        class="block bg-red-100 p-3 rounded-xl hover:bg-red-200">
-        🛒 楽天レシピで検索
-      </a>
-
-      <a href="${delish}" target="_blank"
-        class="block bg-yellow-100 p-3 rounded-xl hover:bg-yellow-200">
-        📱 DELISH KITCHENで検索
-      </a>
-    `;
+  } catch (error) {
+    loadingDiv.classList.add("hidden");
+    resultsDiv.innerHTML = "<p class='text-red-500'>データ取得に失敗しました。</p>";
   }
+}
 </script>
 
 </body>
