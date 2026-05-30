@@ -1,0 +1,309 @@
+import React, { useState, useRef } from 'react';
+import { ChefHat, Utensils, Soup, Salad, RefreshCw, Plus, X, Sparkles, Info, AlertCircle, Globe } from 'lucide-react';
+
+const App = () => {
+  const [ingredients, setIngredients] = useState([]);
+  const [inputValue, setInputValue] = useState('');
+  const [country, setCountry] = useState('any');
+  const [menu, setMenu] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const inputRef = useRef(null);
+
+  // 食材を追加する処理
+  const addIngredient = (e) => {
+    e.preventDefault();
+    const trimmedValue = inputValue.trim();
+    if (trimmedValue && !ingredients.includes(trimmedValue)) {
+      setIngredients([...ingredients, trimmedValue]);
+      setInputValue('');
+    }
+  };
+
+  // 食材を削除する処理
+  const removeIngredient = (indexToRemove) => {
+    setIngredients(ingredients.filter((_, index) => index !== indexToRemove));
+  };
+
+  // APIをリトライ付きで呼び出す関数
+  const fetchWithRetry = async (url, options, retries = 5) => {
+    let delay = 1000;
+    for (let i = 0; i < retries; i++) {
+      try {
+        const response = await fetch(url, options);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        return await response.json();
+      } catch (e) {
+        if (i === retries - 1) throw e;
+        await new Promise(res => setTimeout(res, delay));
+        delay *= 2; // エクスポネンシャルバックオフ
+      }
+    }
+  };
+
+  // AIに献立作成を依頼する処理
+  const generateMenu = async () => {
+    if (ingredients.length === 0) return;
+
+    setIsLoading(true);
+    setError(null);
+    setMenu(null);
+
+    const apiKey = ""; // 実行環境によって自動的に提供されます
+
+    try {
+      const prompt = `冷蔵庫にある以下の食材をなるべく使って、栄養バランスの良い晩ごはんの献立（主菜、副菜、汁物）を考えてください。
+      足りない基本的な調味料や、少量の追加食材（ネギなど）は使っても構いません。
+      
+      【条件】
+      - 料理のスタイル・国: ${country === 'any' ? '指定なし（食材に合ったおいしい料理）' : country}
+      ※指定された国やスタイルの料理を中心にした献立にしてください。
+      
+      使える食材: ${ingredients.join(', ')}`;
+
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+      const payload = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              mainDish: {
+                type: "OBJECT",
+                properties: {
+                  name: { type: "STRING", description: "料理名" },
+                  description: { type: "STRING", description: "使った食材や簡単な特徴" }
+                }
+              },
+              sideDish: {
+                type: "OBJECT",
+                properties: {
+                  name: { type: "STRING", description: "料理名" },
+                  description: { type: "STRING", description: "使った食材や簡単な特徴" }
+                }
+              },
+              soup: {
+                type: "OBJECT",
+                properties: {
+                  name: { type: "STRING", description: "料理名" },
+                  description: { type: "STRING", description: "使った食材や簡単な特徴" }
+                }
+              },
+              nutritionPoint: {
+                type: "STRING",
+                description: "この献立の栄養バランスのポイントや、工夫した点"
+              }
+            },
+            required: ["mainDish", "sideDish", "soup", "nutritionPoint"]
+          }
+        }
+      };
+
+      const data = await fetchWithRetry(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!resultText) throw new Error("AIからの応答がありませんでした");
+
+      const resultJson = JSON.parse(resultText);
+      setMenu(resultJson);
+
+    } catch (err) {
+      console.error(err);
+      setError("献立の作成に失敗しました。少し時間をおいて再度お試しください。");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-orange-50 font-sans text-gray-800 p-4 md:p-8 flex justify-center items-start md:items-center">
+      <div className="max-w-xl w-full bg-white rounded-3xl shadow-xl overflow-hidden border border-orange-100">
+        
+        {/* ヘッダー */}
+        <div className="bg-gradient-to-r from-orange-500 to-amber-500 p-6 text-center text-white relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-full opacity-10 flex items-center justify-center">
+            <Sparkles className="w-48 h-48" />
+          </div>
+          <ChefHat className="w-12 h-12 mx-auto mb-2 relative z-10" />
+          <h1 className="text-2xl font-bold tracking-wider relative z-10">AI献立メーカー</h1>
+          <p className="text-orange-100 text-sm mt-1 relative z-10">冷蔵庫の食材から栄養満点なメニューを提案</p>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* 国・ジャンル選択エリア */}
+          <div className="space-y-3 bg-orange-50/50 p-5 rounded-2xl border border-orange-100">
+            <label className="block text-sm font-bold text-gray-700 flex items-center gap-2">
+              <Globe className="w-5 h-5 text-orange-500" />
+              料理のスタイル（国）
+            </label>
+            <select
+              value={country}
+              onChange={(e) => setCountry(e.target.value)}
+              className="w-full bg-white border border-gray-300 text-gray-700 py-3 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent transition-all shadow-sm appearance-none cursor-pointer"
+            >
+              <option value="any">🌏 指定なし（食材に合わせて）</option>
+              <option value="日本料理（和食）">🇯🇵 日本料理（和食）</option>
+              <option value="中華料理">🇨🇳 中華料理</option>
+              <option value="韓国料理">🇰🇷 韓国料理</option>
+              <option value="イタリア料理">🇮🇹 イタリアン</option>
+              <option value="フランス料理">🇫🇷 フレンチ</option>
+              <option value="スペイン料理">🇪🇸 スペイン料理</option>
+              <option value="エスニック料理（タイ・ベトナムなど）">🇹🇭 エスニック（タイ等）</option>
+              <option value="メキシコ料理">🇲🇽 メキシコ料理</option>
+            </select>
+          </div>
+
+          {/* 食材入力エリア */}
+          <div className="space-y-4 bg-orange-50/50 p-5 rounded-2xl border border-orange-100">
+            <label className="block text-sm font-bold text-gray-700 flex items-center gap-2">
+              冷蔵庫にある食材を教えてください
+            </label>
+            
+            <form onSubmit={addIngredient} className="flex gap-2">
+              <input
+                ref={inputRef}
+                type="text"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                placeholder="例: 豚肉、キャベツ、卵"
+                className="flex-1 bg-white border border-gray-300 text-gray-700 py-3 px-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent transition-all shadow-sm"
+              />
+              <button 
+                type="submit"
+                disabled={!inputValue.trim()}
+                className="bg-orange-100 text-orange-600 hover:bg-orange-200 p-3 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Plus className="w-6 h-6" />
+              </button>
+            </form>
+
+            {/* 入力された食材のタグ表示 */}
+            {ingredients.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-2">
+                {ingredients.map((item, index) => (
+                  <span 
+                    key={index} 
+                    className="inline-flex items-center gap-1 bg-white border border-orange-200 text-orange-700 px-3 py-1.5 rounded-full text-sm font-medium shadow-sm animate-fade-in"
+                  >
+                    {item}
+                    <button 
+                      onClick={() => removeIngredient(index)}
+                      className="hover:bg-orange-100 rounded-full p-0.5 transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* エラーメッセージ */}
+          {error && (
+            <div className="bg-red-50 text-red-600 p-4 rounded-xl flex items-start gap-3 text-sm">
+              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+              <p>{error}</p>
+            </div>
+          )}
+
+          {/* 生成ボタン */}
+          <button 
+            onClick={generateMenu}
+            disabled={isLoading || ingredients.length === 0}
+            className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 active:scale-[0.98] text-white font-bold py-4 px-4 rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+          >
+            {isLoading ? (
+              <RefreshCw className="w-5 h-5 animate-spin" />
+            ) : (
+              <Sparkles className="w-5 h-5" />
+            )}
+            <span>{isLoading ? 'AIが考え中...' : 'この食材で献立を作る'}</span>
+          </button>
+
+          {/* ローディング表示 */}
+          {isLoading && (
+            <div className="py-8 text-center animate-pulse">
+              <p className="text-orange-500 font-medium">栄養バランスを計算しています...</p>
+            </div>
+          )}
+
+          {/* 結果表示エリア */}
+          {menu && !isLoading && (
+            <div className="mt-8 space-y-4 animate-fade-in">
+              <h2 className="text-center font-bold text-gray-500 mb-6 flex items-center justify-center gap-4">
+                <span className="h-px bg-gray-300 flex-1"></span>
+                AIの提案献立
+                <span className="h-px bg-gray-300 flex-1"></span>
+              </h2>
+
+              {/* 主菜 */}
+              <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex gap-4 relative overflow-hidden">
+                <div className="bg-white text-red-500 p-3 rounded-xl z-10 h-fit shadow-sm">
+                  <Utensils className="w-6 h-6" />
+                </div>
+                <div className="z-10 flex-1">
+                  <p className="text-xs font-bold text-red-500 mb-1">主菜</p>
+                  <p className="font-bold text-gray-800 text-lg leading-tight">{menu.mainDish.name}</p>
+                  <p className="text-sm text-gray-600 mt-2 leading-relaxed">{menu.mainDish.description}</p>
+                </div>
+              </div>
+
+              {/* 副菜 */}
+              <div className="bg-green-50 border border-green-100 p-4 rounded-2xl flex gap-4 relative overflow-hidden">
+                <div className="bg-white text-green-500 p-3 rounded-xl z-10 h-fit shadow-sm">
+                  <Salad className="w-6 h-6" />
+                </div>
+                <div className="z-10 flex-1">
+                  <p className="text-xs font-bold text-green-600 mb-1">副菜</p>
+                  <p className="font-bold text-gray-800 text-lg leading-tight">{menu.sideDish.name}</p>
+                  <p className="text-sm text-gray-600 mt-2 leading-relaxed">{menu.sideDish.description}</p>
+                </div>
+              </div>
+
+              {/* 汁物 */}
+              <div className="bg-yellow-50 border border-yellow-100 p-4 rounded-2xl flex gap-4 relative overflow-hidden">
+                <div className="bg-white text-yellow-600 p-3 rounded-xl z-10 h-fit shadow-sm">
+                  <Soup className="w-6 h-6" />
+                </div>
+                <div className="z-10 flex-1">
+                  <p className="text-xs font-bold text-yellow-600 mb-1">汁物</p>
+                  <p className="font-bold text-gray-800 text-lg leading-tight">{menu.soup.name}</p>
+                  <p className="text-sm text-gray-600 mt-2 leading-relaxed">{menu.soup.description}</p>
+                </div>
+              </div>
+              
+              {/* 栄養ポイント */}
+              <div className="bg-blue-50 border border-blue-100 p-5 rounded-2xl mt-6">
+                <div className="flex items-center gap-2 text-blue-700 font-bold mb-2">
+                  <Info className="w-5 h-5" />
+                  <h3>栄養バランスのポイント</h3>
+                </div>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  {menu.nutritionPoint}
+                </p>
+              </div>
+
+            </div>
+          )}
+
+        </div>
+      </div>
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes fade-in {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+          animation: fade-in 0.4s ease-out forwards;
+        }
+      `}} />
+    </div>
+  );
+};
+
+export default App;
