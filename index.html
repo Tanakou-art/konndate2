@@ -1,124 +1,203 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>世界の料理レシピ検索</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://cdn.tailwindcss.com"></script>
+    <meta charset="UTF-8">
+    <title>国別レシピ検索（爆速・自動翻訳版）</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-
 <body class="bg-orange-50 min-h-screen flex items-center justify-center p-6">
+    <div class="bg-white shadow-xl rounded-3xl p-6 w-full max-w-2xl">
+        <h1 class="text-2xl font-bold text-center text-orange-600 mb-2">🌍 国別レシピ検索</h1>
+        <p class="text-center text-gray-500 mb-6">食材が1つでも一致すれば表示します</p>
+        
+        <div class="mb-4">
+            <label class="font-bold text-sm">国を選択</label>
+            <select id="countrySelect" class="w-full border rounded-xl p-2 mt-2 max-h-60 overflow-y-auto">
+                <!-- アジア・中東 -->
+                <optgroup label="アジア・オセアニア">
+                    <option value="Japanese">🇯🇵 日本</option>
+                    <option value="Chinese">🇨🇳 中国</option>
+                    <option value="Indian">🇮🇳 インド</option>
+                    <option value="Thai">🇹🇭 タイ</option>
+                    <option value="Vietnamese">🇻🇳 ベトナム</option>
+                    <option value="Malaysian">🇲🇾 マレーシア</option>
+                    <option value="Filipino">🇵🇭 フィリピン</option>
+                </optgroup>
+                <!-- ヨーロッパ -->
+                <optgroup label="ヨーロッパ">
+                    <option value="Italian">🇮🇹 イタリア</option>
+                    <option value="French">🇫🇷 フランス</option>
+                    <option value="Spanish">🇪🇸 スペイン</option>
+                    <option value="British">🇬🇧 イギリス</option>
+                    <option value="Irish">🇮🇪 アイルランド</option>
+                    <option value="Greek">🇬🇷 ギリシャ</option>
+                    <option value="Portuguese">🇵🇹 ポルトガル</option>
+                    <option value="Dutch">🇳🇱 オランダ</option>
+                    <option value="Polish">🇵🇱 ポーランド</option>
+                    <option value="Russian">🇷🇺 ロシア</option>
+                    <option value="Ukrainian">🇺🇦 ウクライナ</option>
+                    <option value="Croatian">🇭🇷 クロアチア</option>
+                </optgroup>
+                <!-- アメリカ大陸 -->
+                <optgroup label="北米・中南米">
+                    <option value="American">🇺🇸 アメリカ</option>
+                    <option value="Canadian">🇨🇦 カナダ</option>
+                    <option value="Mexican">🇲🇽 メキシコ</option>
+                    <option value="Jamaican">🇯🇲 ジャマイカ</option>
+                </optgroup>
+                <!-- アフリカ・その他 -->
+                <optgroup label="アフリカ・中東">
+                    <option value="Moroccan">🇲🇦 モロッコ</option>
+                    <option value="Egyptian">🇪🇬 エジプト</option>
+                    <option value="Kenyan">🇰🇪 ケニア</option>
+                    <option value="Tunisian">🇹🇳 チュニジア</option>
+                    <option value="Turkish">🇹🇷 トルコ</option>
+                </optgroup>
+            </select>
+        </div>
+        
+        <div class="flex gap-2 mb-4">
+            <input id="ingredientInput" type="text" placeholder="例：chicken tomato" class="flex-1 border rounded-xl p-2">
+            <button onclick="searchRecipe()" class="bg-orange-500 text-white px-4 rounded-xl hover:bg-orange-600 transition-colors">検索</button>
+        </div>
+        
+        <div id="errorBox" class="hidden bg-red-100 text-red-700 p-3 rounded-xl mb-4 text-center text-sm"></div>
+        <div id="loading" class="hidden text-orange-500 mb-4 text-center font-bold animate-pulse">検索中...</div>
+        <div id="results" class="space-y-6"></div>
+    </div>
 
-<div class="bg-white shadow-xl rounded-3xl p-6 w-full max-w-2xl">
+    <script>
+        // 🌟 無料でん使えるGoogle翻訳の仕組み
+        async function translateToJapanese(text) {
+            if (!text) return "";
+            try {
+                const response = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q=${encodeURIComponent(text)}`);
+                const data = await response.json();
+                // 翻訳結果を結合して返す
+                return data[0].map(item => item[0]).join('');
+            } catch (error) {
+                console.error("翻訳エラー:", error);
+                return text; // 失敗したら元の英語を返す
+            }
+        }
 
-  <h1 class="text-2xl font-bold text-center text-orange-600 mb-2">
-    🌍 世界の料理レシピ検索
-  </h1>
+        async function searchRecipe() {
+            const country = document.getElementById("countrySelect").value;
+            const input = document.getElementById("ingredientInput").value.trim().toLowerCase();
+            const resultsDiv = document.getElementById("results");
+            const loadingDiv = document.getElementById("loading");
+            const errorBox = document.getElementById("errorBox");
 
-  <p class="text-center text-gray-500 mb-6">
-    国を選ぶと、その国の代表的な料理レシピ情報を取得します
-  </p>
+            errorBox.classList.add("hidden");
+            resultsDiv.innerHTML = "";
 
-  <!-- 国選択 -->
-  <div class="mb-4">
-    <label class="font-bold text-sm">国を選択</label>
-    <select id="countrySelect" class="w-full border rounded-xl p-2 mt-2">
-      <option value="日本料理">🇯🇵 日本</option>
-      <option value="イタリア料理">🇮🇹 イタリア</option>
-      <option value="フランス料理">🇫🇷 フランス</option>
-      <option value="中華料理">🇨🇳 中国</option>
-      <option value="韓国料理">🇰🇷 韓国</option>
-      <option value="メキシコ料理">🇲🇽 メキシコ</option>
-      <option value="インド料理">🇮🇳 インド</option>
-      <option value="タイ料理">🇹🇭 タイ</option>
-    </select>
-  </div>
+            if (!input) {
+                errorBox.textContent = "食材を英語で入力してください（例: chicken tomato）";
+                errorBox.classList.remove("hidden");
+                return;
+            }
 
-  <button
-    onclick="searchCuisine()"
-    class="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold py-3 rounded-2xl"
-  >
-    🍳 料理を表示する
-  </button>
+            loadingDiv.classList.remove("hidden");
 
-  <div id="loading" class="hidden text-orange-500 mt-4">
-    データ取得中...
-  </div>
+            try {
+                const ingredients = input.split(" ");
+                const res = await fetch(`https://www.themealdb.com/api/json/v1/1/filter.php?a=${country}`);
+                const data = await res.json();
 
-  <div id="results" class="space-y-6 mt-6"></div>
+                if (!data.meals) {
+                    loadingDiv.classList.add("hidden");
+                    resultsDiv.innerHTML = "<p class='text-gray-500 text-center'>その国のレシピがありません。</p>";
+                    return;
+                }
 
-</div>
+                // ✅ 検索対象を最大50件に拡大
+                const mealsToCheck = data.meals.slice(0, 50);
+                const detailsData = [];
+                
+                // 🚀 APIエラーを防ぐため、10件ずつ小分けにして同時に取得（チャンク処理）
+                const chunkSize = 10;
+                for (let i = 0; i < mealsToCheck.length; i += chunkSize) {
+                    const chunk = mealsToCheck.slice(i, i + chunkSize);
+                    const detailPromises = chunk.map(meal => 
+                        fetch(`https://www.themealdb.com/api/json/v1/1/lookup.php?i=${meal.idMeal}`).then(r => r.json())
+                    );
+                    const chunkResults = await Promise.all(detailPromises);
+                    detailsData.push(...chunkResults);
+                }
 
-<script>
-async function searchCuisine() {
-  const country = document.getElementById("countrySelect").value;
-  const resultsDiv = document.getElementById("results");
-  const loadingDiv = document.getElementById("loading");
+                let bestMatch = null;
+                let bestScore = 0;
 
-  resultsDiv.innerHTML = "";
-  loadingDiv.classList.remove("hidden");
+                for (let detailData of detailsData) {
+                    const recipe = detailData.meals[0];
+                    let recipeIngredients = [];
+                    for (let i = 1; i <= 20; i++) {
+                        const ing = recipe[`strIngredient${i}`];
+                        if (ing) recipeIngredients.push(ing.toLowerCase());
+                    }
 
-  try {
-    const url = "https://ja.wikipedia.org/w/api.php?" +
-      new URLSearchParams({
-        action: "query",
-        list: "search",
-        srsearch: country,
-        format: "json",
-        origin: "*"
-      });
+                    let score = ingredients.filter(inputIng =>
+                        recipeIngredients.some(rIng => rIng.includes(inputIng))
+                    ).length;
 
-    const response = await fetch(url);
-    const data = await response.json();
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestMatch = recipe;
+                    }
+                }
 
-    if (!data.query.search.length) {
-      loadingDiv.classList.add("hidden");
-      resultsDiv.innerHTML = "<p class='text-gray-500'>料理情報が見つかりませんでした。</p>";
-      return;
-    }
+                if (!bestMatch) {
+                    bestMatch = detailsData[0].meals[0];
+                }
 
-    // 上位3件表示
-    const topResults = data.query.search.slice(0,3);
+                // 🌟 材料リストの構築（英語の塊を作る）
+                let englishIngredients = [];
+                for (let i = 1; i <= 20; i++) {
+                    const ing = bestMatch[`strIngredient${i}`];
+                    const measure = bestMatch[`strMeasure${i}`];
+                    if (ing && ing.trim() !== "") {
+                        englishIngredients.push(`${ing} - ${measure}`);
+                    }
+                }
 
-    for (let item of topResults) {
+                // 🌟 【翻訳処理】料理名、材料、作り方をGoogleで翻訳
+                loadingDiv.textContent = "日本語に翻訳中...";
+                
+                const [jaTitle, jaIngredientsText, jaInstructions] = await Promise.all([
+                    translateToJapanese(bestMatch.strMeal),
+                    translateToJapanese(englishIngredients.join('\n')),
+                    translateToJapanese(bestMatch.strInstructions)
+                ]);
 
-      const detailUrl = "https://ja.wikipedia.org/w/api.php?" +
-        new URLSearchParams({
-          action: "query",
-          prop: "extracts",
-          exintro: true,
-          explaintext: true,
-          titles: item.title,
-          format: "json",
-          origin: "*"
-        });
+                // 翻訳された材料をリスト（li）に分解
+                const jaIngredientsList = jaIngredientsText.split('\n').map(ing => `<li>${ing}</li>`).join('');
 
-      const detailResponse = await fetch(detailUrl);
-      const detailData = await detailResponse.json();
-      const pages = detailData.query.pages;
-      const page = pages[Object.keys(pages)[0]];
+                loadingDiv.classList.add("hidden");
+                loadingDiv.textContent = "検索中..."; // 元に戻す
 
-      const card = document.createElement("div");
-      card.className = "border rounded-xl p-4 bg-orange-50";
+                resultsDiv.innerHTML = `
+                    <div class="border rounded-xl p-4 bg-orange-50 shadow-sm">
+                        <h2 class="font-bold text-xl text-orange-700 text-center mb-1">${jaTitle}</h2>
+                        <p class="text-center text-xs text-gray-400 mb-4">(原語: ${bestMatch.strMeal})</p>
+                        <img src="${bestMatch.strMealThumb}" alt="${jaTitle}" class="w-full h-auto rounded-xl my-4 shadow-md object-cover max-h-80">
+                        <h3 class="font-bold mt-4 text-orange-800 border-b border-orange-200 pb-1">材料</h3>
+                        <ul class="list-disc ml-6 mt-2 text-gray-700 text-sm space-y-1">
+                            ${jaIngredientsList}
+                        </ul>
+                        <h3 class="font-bold mt-6 text-orange-800 border-b border-orange-200 pb-1">作り方</h3>
+                        <p class="text-sm mt-2 whitespace-pre-line text-gray-700 leading-relaxed">${jaInstructions}</p>
+                    </div>
+                `;
 
-      card.innerHTML = `
-        <h2 class="font-bold text-lg text-orange-700">${item.title}</h2>
-        <p class="text-sm text-gray-700 mt-2">
-          ${page.extract ? page.extract.substring(0, 300) + "..." : "説明が取得できませんでした。"}
-        </p>
-      `;
-
-      resultsDiv.appendChild(card);
-    }
-
-    loadingDiv.classList.add("hidden");
-
-  } catch (error) {
-    loadingDiv.classList.add("hidden");
-    resultsDiv.innerHTML = "<p class='text-red-500'>データ取得に失敗しました。</p>";
-  }
-}
-</script>
-
+            } catch (error) {
+                loadingDiv.classList.add("hidden");
+                loadingDiv.textContent = "検索中...";
+                errorBox.textContent = "データの取得または翻訳に失敗しました。";
+                errorBox.classList.remove("hidden");
+                console.error("Error:", error);
+            }
+        }
+    </script>
 </body>
 </html>
